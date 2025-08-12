@@ -182,15 +182,15 @@ def process(input_dir, output_dir, config):
                 
                 # Stitch the processed images with NO BLENDING
                 log_debug(f"  Stitching images (NO BLENDING):")
-                stitched_img = stitch_images_no_blend(img1_processed, img2_processed, log_debug, config_data)
+                stitched_img, x_offset_used = stitch_images_no_blend(img1_processed, img2_processed, log_debug, config_data)
                 
                 # Save debug image: d_stitched
                 if config_data['debug']['save_intermediate']:
                     cv2.imwrite(str(output_dir / f"pair_{i:03d}_d_stitched.png"), stitched_img)
                 
-                # Final crop to remove remaining white space around document
-                log_debug(f"  Final cropping to document boundaries:")
-                final_img = final_crop_to_document(stitched_img, log_debug, config_data)
+                # Final crop to remove edge artifacts based on stitching offset
+                log_debug(f"  Final edge cleanup crop:")
+                final_img = final_crop_to_document(stitched_img, x_offset_used, log_debug)
                 
                 # Save final result with configured format
                 output_format = config_data['output']['file_format'].lower()
@@ -282,8 +282,8 @@ def crop_to_content_area(img_array, log_func, img_name, config):
     log_func(f"    After horizontal crop: {w_new}x{h_new}")
     
     # Step 2: Analyze edge columns for vertical cropping
-    max_vertical_crop = int(h_new * max_vertical_percent)
-    log_func(f"    Max vertical crop allowed: {max_vertical_crop}px ({max_vertical_percent*100:.1f}%)")
+    max_vertical_crop = int(h_new * max_vertical_percent/100)
+    log_func(f"    Max vertical crop allowed: {max_vertical_crop}px ({max_vertical_percent:.1f}%)")
     
     # Check first column (leftmost after horizontal crop)
     first_col = gray_h_cropped[:, 0]
@@ -596,9 +596,9 @@ def try_standard_hough_flexible(edges, log_func):
             
             angles = []
             for rho, theta in lines[:, 0]:
-                angle_deg = np.degrees(theta) - 90
-                if abs(angle_deg) <= 20:  # Wider acceptance
-                    angles.append(angle_deg)
+                angle_degrees = np.degrees(theta) - 90
+                if abs(angle_degrees) <= 20:  # Wider acceptance
+                    angles.append(angle_degrees)
             
             if len(angles) >= 2:
                 filtered_angles = remove_outliers(angles) if len(angles) > 3 else angles
@@ -732,6 +732,7 @@ def crop_rotation_mathematically(rotated_img, angle_degrees, original_w, origina
 def stitch_images_no_blend(img1_array, img2_array, log_func, config):
     """
     Stitch images with NO BLENDING - hard cut to preserve text quality.
+    Returns both the stitched image and the x_offset used for final cropping.
     """
     h1, w1 = img1_array.shape[:2]
     h2, w2 = img2_array.shape[:2]
@@ -748,13 +749,15 @@ def stitch_images_no_blend(img1_array, img2_array, log_func, config):
     
     if overlap_result is None:
         log_func(f"    No good overlap found, using simple concatenation")
-        return simple_concatenate(top_img, bottom_img, log_func)
+        stitched = simple_concatenate(top_img, bottom_img, log_func)
+        return stitched, 0  # Return 0 x_offset for simple concatenation
     
     y_overlap, x_offset, confidence = overlap_result
     log_func(f"    Best overlap: Y={y_overlap}px, X={x_offset}px (confidence: {confidence:.3f})")
     
     # Create stitched image with NO BLENDING
-    return create_stitched_image_no_blend(top_img, bottom_img, y_overlap, x_offset, log_func)
+    stitched = create_stitched_image_no_blend(top_img, bottom_img, y_overlap, x_offset, log_func)
+    return stitched, x_offset  # Return both image and x_offset
 
 def find_overlap_template_matching(top_img, bottom_img, log_func, config):
     """
@@ -930,90 +933,35 @@ def create_stitched_image_no_blend(top_img, bottom_img, y_overlap, x_offset, log
     log_func(f"    ✓ NO BLEND stitching complete: {stitched.shape[1]}x{stitched.shape[0]}")
     return stitched
 
-def final_crop_to_document(img_array, log_func, config):
+def final_crop_to_document(img_array, x_offset, log_func):
     """
-    Final crop to remove edge artifacts using column-by-column analysis.
-    Trims left and right sides when columns are >threshold% background pixels.
+    Simple final crop that removes edge artifacts based on the x_offset used in stitching.
+    This ensures both sides are cropped equally to remove any misalignment artifacts.
     """
-    log_func(f"    Final document crop...")
+    log_func(f"    Final edge cleanup crop...")
     
     h, w = img_array.shape[:2]
     log_func(f"    Stitched size: {w}x{h}")
+    log_func(f"    Using x_offset from stitching: {x_offset}px")
     
-    # Get cropping config
-    light_threshold = config['cropping']['final_crop_light_threshold']
-    dark_threshold = config['cropping']['final_crop_dark_threshold']
-    background_percent = config['cropping']['final_crop_background_percent']
+    # Use the absolute value of x_offset as the crop amount for both sides
+    crop_amount = abs(x_offset)
     
-    log_func(f"    Using thresholds: light≥{light_threshold}, dark≤{dark_threshold}, {background_percent*100:.1f}% column threshold")
+    # Ensure we don't crop more than 15% of the width as a safety measure
+    max_crop = int(w * 0.15)
+    if crop_amount > max_crop:
+        log_func(f"    Limiting crop from {crop_amount}px to {max_crop}px (15% of width)")
+        crop_amount = max_crop
     
-    def is_background_pixel(pixel):
-        """Check if a pixel is near-white, near-black, or scanning artifacts."""
-        if len(pixel.shape) == 0:  # Grayscale
-            return pixel >= light_threshold or pixel <= dark_threshold
-        else:  # Color (BGR)
-            b, g, r = pixel[0], pixel[1], pixel[2]
-            # Near white: all channels >= light_threshold
-            # Dark artifacts: all channels <= dark_threshold
-            is_white = (b >= light_threshold and g >= light_threshold and r >= light_threshold)
-            is_dark_artifact = (b <= dark_threshold and g <= dark_threshold and r <= dark_threshold)
-            return is_white or is_dark_artifact
-    
-    def column_is_background(column):
-        """Check if a column is at least background_percent background pixels."""
-        background_count = 0
-        total_pixels = column.shape[0]
-        
-        for row in range(total_pixels):
-            if is_background_pixel(column[row]):
-                background_count += 1
-        
-        background_percentage = background_count / total_pixels
-        return background_percentage >= background_percent
-    
-    # Trim from left side
-    left_crop = 0
-    log_func(f"    Trimming from left:")
-    for x in range(w):
-        column = img_array[:, x]
-        if column_is_background(column):
-            left_crop = x + 1
-            if x % 50 == 0 or x < 20:  # Debug output for first 20 and every 50 columns
-                background_count = sum(1 for row in range(h) if is_background_pixel(column[row]))
-                background_pct = background_count / h * 100
-                log_func(f"      Column {x}: {background_pct:.1f}% background, trimming")
-        else:
-            background_count = sum(1 for row in range(h) if is_background_pixel(column[row]))
-            background_pct = background_count / h * 100
-            log_func(f"      Column {x}: {background_pct:.1f}% background, stopping left trim")
-            break
-    
-    # Trim from right side
-    right_crop = w
-    log_func(f"    Trimming from right:")
-    for x in range(w-1, -1, -1):
-        column = img_array[:, x]
-        if column_is_background(column):
-            right_crop = x
-            if (w-1-x) % 50 == 0 or (w-1-x) < 20:  # Debug output for first 20 and every 50 columns from right
-                background_count = sum(1 for row in range(h) if is_background_pixel(column[row]))
-                background_pct = background_count / h * 100
-                log_func(f"      Column {x}: {background_pct:.1f}% background, trimming")
-        else:
-            background_count = sum(1 for row in range(h) if is_background_pixel(column[row]))
-            background_pct = background_count / h * 100
-            log_func(f"      Column {x}: {background_pct:.1f}% background, stopping right trim")
-            break
-    
-    log_func(f"    Trim results: left={left_crop}px, right={w-right_crop}px")
-    
-    # Apply the crop
-    if left_crop < right_crop:
+    # Apply symmetric crop from both sides
+    if crop_amount > 0 and crop_amount < w // 2:
+        left_crop = crop_amount
+        right_crop = w - crop_amount
         cropped = img_array[:, left_crop:right_crop]
-        log_func(f"    ✓ Final crop: {w}x{h} → {cropped.shape[1]}x{cropped.shape[0]} (removed {left_crop + (w-right_crop)}px width)")
+        log_func(f"    ✓ Edge cleanup crop: {w}x{h} → {cropped.shape[1]}x{cropped.shape[0]} (removed {crop_amount}px from each side)")
         return cropped
     else:
-        log_func(f"    ⚠ Invalid crop bounds, keeping original")
+        log_func(f"    ⚠ No crop needed or crop amount too large, keeping original")
         return img_array
 
 def simple_concatenate(top_img, bottom_img, log_func):
@@ -1033,7 +981,7 @@ def simple_concatenate(top_img, bottom_img, log_func):
     
     stitched = np.vstack([top_resized, bottom_resized])
     log_func(f"    ✓ Simple concatenation: {stitched.shape[1]}x{stitched.shape[0]}")
-    return stitched
+    return stitched, 0  # Return 0 x_offset for simple concatenation
 
 if __name__ == '__main__':
     process()

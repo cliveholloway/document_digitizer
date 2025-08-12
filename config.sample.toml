@@ -1,0 +1,48 @@
+# Document Digitizer Configuration File
+
+[debug]
+# Save intermediate processing images (a_precrop, b_rotated, c_deskewed, d_stitched)
+save_intermediate = false
+
+# Logging target: "stdout" for console output, "file" for log file + minimal console
+log_target = "stdout"
+
+[processing]
+# Minimum rotation angle (degrees) to trigger deskewing
+# Below this threshold, images are considered already straight
+angle_threshold = 0.1
+
+# Maximum rotation angle (degrees) to attempt correction
+# Larger rotations are likely detection errors and will be skipped
+max_rotation = 10.0
+
+# Overlap detection parameters for stitching
+# Maximum Y overlap to search when finding image overlap (pixels)
+max_y_overlap = 1400
+
+# Maximum X offset to search when aligning images (pixels)  
+max_x_offset = 300
+
+# Minimum confidence score to accept overlap detection (0.0-1.0)
+# Lower values are more permissive, higher values require better matches
+overlap_confidence_threshold = 0.25
+
+# Backup confidence threshold for low-quality matches (0.0-1.0)
+# Used when primary threshold fails but position is consistent
+overlap_confidence_backup = 0.20
+
+[cropping]
+# Pre-processing crop: systematic edge detection
+# Maximum percentage of image height to crop from top/bottom edges (0-100)
+precrop_max_vertical_percent = 10
+
+[output]
+# Output image format
+# Available: "png" (lossless, recommended), "jpg" (lossy, smaller), "tiff" (lossless, large)
+# Recommended: "png" - best balance of quality and file size for documents
+file_format = "png"
+
+# Image quality (1-100, only applies to JPG format)
+# PNG/TIFF ignore this setting as they are lossless
+# Recommended: 95 - high quality with reasonable compression for JPG
+quality = 95

@@ -211,3 +211,6 @@ __marimo__/
 
 # output dir used in examples (for cleaniness :D)
 output/
+
+# config file
+config.toml

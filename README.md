@@ -1,16 +1,16 @@
 # Document Digitizer
 
-A Python tool for processing paired scanned handwritten document images into clean, aligned digital documents. Automatically detects rotation, removes scanning artifacts, and stitches overlapping page pairs with precision text preservation.
+A Python tool for processing paired, scanned, handwritten document images into clean, aligned digital documents. Automatically detects rotation, removes scanning artifacts, and stitches overlapping page pairs with precision text preservation.
 
-![Sample Output](docs/sample_before_after.png)
+![Example](docs/example.md)
 
 ## Features
 
 - **Intelligent Deskewing** - Detects and corrects document rotation using multiple algorithms
-- **Artifact Removal** - Eliminates scanning edge artifacts, black bars, and rotation wedges  
+- **Artifact Removal** - Eliminates edge artifacts and rotation wedges  
 - **Precise Stitching** - Aligns overlapping page pairs with template matching
 - **Text Preservation** - No-blend stitching maintains crisp, readable text
-- **Configurable Processing** - Extensive TOML configuration for different document types
+- **Configurable Processing** - Extensive TOML configuration for different quality documents
 - **Debug Logging** - Detailed processing logs and intermediate file saving
 
 ## Quick Start
@@ -19,15 +19,20 @@ A Python tool for processing paired scanned handwritten document images into cle
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/document-digitizer.git
-cd document-digitizer
+git clone https://github.com/cliveholloway/document_digitizer.git
+cd document_digitizer
 
-# Install in development mode
-pip install -e .
+# Create and activate virtual environment
+python3 -m venv .venv
 
-# Or install dependencies directly
-pip install click opencv-python pillow rich numpy tomli
-```
+# Activate virtual environment
+# On Windows:
+.venv\Scripts\activate
+# On macOS/Linux:
+source .venv/bin/activate
+
+# Install the package and dependencies
+pip install -e .```
 
 ### Basic Usage
 
@@ -37,13 +42,31 @@ pip install click opencv-python pillow rich numpy tomli
 cp config.sample.toml config.toml
 ```
 
+For your initial testing you can probably leave it as-is, but when running a project,
+I suggest you change the debug options:
+
+```toml
+[debug]
+# Save intermediate processing images (a_precrop, b_rotated, c_deskewed, d_stitched)
+save_intermediate = true
+
+# Logging target: "stdout" for console output, "file" for log file + minimal console
+log_target = "stdout"
+```
+Assuming the final images are fine, you can set `save_inermediate` to false, but it
+will give you a useful idea as to what the steps are, and be helpful in debugging
+problematic input pairs.
+
 2. **Organize your scanned images:**
+
+They will be processed in pairs, in alphabetical order.
+
 ```
 input/
-├── page001.tif
-├── page002.tif  # These will be paired and stitched
-├── page003.tif
-├── page004.tif  # These will be paired and stitched
+├── image001.tif
+├── image002.tif  # These will be paired and stitched
+├── image003.tif
+├── image004.tif  # These will be paired and stitched
 └── ...
 ```
 
@@ -55,14 +78,14 @@ document-digitizer input/ output/
 4. **Results:**
 ```
 output/
-├── pair_001.png  # Processed and stitched pages 1+2
-├── pair_002.png  # Processed and stitched pages 3+4
+├── pair_001.png  # Processed and stitched images 1+2
+├── pair_002.png  # Processed and stitched images 3+4
 └── ...
 ```
 
 ## Configuration
 
-The tool uses a `config.toml` file for all processing parameters. See [CONFIGURATION.md](CONFIGURATION.md) for detailed configuration options.
+The tool uses a `config.toml` file for all processing parameters. See [docs/configuration.md](configuration.md) for detailed configuration options.
 
 ### Sample Configuration
 
@@ -76,12 +99,10 @@ angle_threshold = 0.1
 max_rotation = 10.0
 
 [cropping]
-final_crop_light_threshold = 240
-final_crop_dark_threshold = 40
+precrop_max_vertical_percent = 10
 
 [output]
 file_format = "png"
-quality = 95
 ```
 
 ## Advanced Usage
@@ -108,7 +129,7 @@ quality = 95         # for JPG only
 3. **Math Crop** - Remove rotation wedges using trigonometry
 4. **Template Match** - Find optimal overlap between page pairs
 5. **Stitch** - Combine images with hard cut (no blending)
-6. **Final Crop** - Remove remaining edge artifacts
+6. **Final Crop** - Crop edges to remove X-axis offset, if possible.
 
 ## Debug Output
 
@@ -130,18 +151,12 @@ output/
 [processing]
 angle_threshold = 0.05  # More sensitive rotation detection
 max_rotation = 5.0      # Conservative rotation limit
-
-[cropping]
-final_crop_dark_threshold = 60  # Catch more age spots/stains
 ```
 
 ### For Poor Quality Scans
 ```toml
 [processing]
 overlap_confidence_threshold = 0.15  # More permissive matching
-
-[cropping]
-final_crop_background_percent = 0.03  # More aggressive edge removal
 ```
 
 ### For High Quality Documents
@@ -171,24 +186,19 @@ file_format = "tiff"  # Lossless archival format
 - Reduce `max_rotation` to be more conservative
 - Check that images aren't severely rotated (>10°)
 
-**Black bars remain** - Edge artifact removal isn't aggressive enough
-- Increase `final_crop_dark_threshold` (try 60-80)
-- Decrease `final_crop_background_percent` (try 0.03)
-
 **Text is cut off** - Cropping is too aggressive
-- Increase `final_crop_background_percent` 
 - Check `precrop_max_vertical_percent` isn't too high
 
-See [CONFIGURATION.md](CONFIGURATION.md) for detailed parameter explanations.
+See [docs/configuration.md](configuration.md) for detailed parameter explanations.
 
 ## Contributing
 
-Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions welcome! Please read [docs/contributing.md](contributing.md) for guidelines.
 
 ## License
 
-[Your chosen license here]
+[LICENSE](LICENSE)
 
 ## Acknowledgments
 
-Built for digitizing historical handwritten documents with precision and care for text preservation.
+Claude did the heavy lifting.

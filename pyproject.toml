@@ -5,20 +5,42 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "document-digitizer"
 version = "0.1.0"
-description = "CLI tool for processing paired scanned handwriting images into transcribed text"
-authors = [{name = "Clive Holloway", email = "your-email@example.com"}]
+description = "Process paired scanned document images into clean, aligned digital documents with intelligent stitching"
+authors = [{name = "Clive Holloway", email = "clive.holloway@gmail.com"}]
 readme = "README.md"
 requires-python = ">=3.9"
+license = {text = "MIT"}
+keywords = ["document", "digitization", "image-processing", "scanning", "stitching"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers", 
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10", 
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
 dependencies = [
     "click>=8.0",
     "opencv-python>=4.8",
     "pillow>=10.0",
     "rich>=13.0",
     "numpy>=1.24",
+    "tomli>=2.0; python_version<'3.11'",
 ]
 
+[project.urls]
+Homepage = "https://github.com/cliveholloway/document_digitizer"
+Repository = "https://github.com/cliveholloway/document_digitizer"
+Issues = "https://github.com/cliveholloway/document_digitizer/issues"
+
 [project.scripts]
-document-digitizer = "document_digitizer.cli:process"
+document-digitizer = "cli:process"
 
 [project.optional-dependencies]
 dev = [
@@ -27,8 +49,5 @@ dev = [
     "flake8>=6.0",
 ]
 
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools.package-dir]
-"" = "src"
+[tool.setuptools]
+py-modules = ["cli"]

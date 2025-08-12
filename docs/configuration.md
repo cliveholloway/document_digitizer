@@ -131,60 +131,15 @@ Controls pre-processing and final edge artifact removal.
 
 ```toml
 [cropping]
-precrop_max_vertical_percent = 0.1
-final_crop_light_threshold = 240
-final_crop_dark_threshold = 40
-final_crop_background_percent = 0.05
+precrop_max_vertical_percent = 10
 ```
 
-#### `precrop_max_vertical_percent` (float, 0.0-1.0)
-- **Default:** `0.1` (10%)
+#### `precrop_max_vertical_percent` (0-30)
+- **Default:** `10`
 - **Purpose:** Maximum percentage of image height to crop during pre-processing
-- **Range:** `0.05` - `0.3`
+- **Range:** `5` - `30`
 - **Prevents:** Over-aggressive removal of manual rotation artifacts
 - **Tune when:** Pre-processing is removing too much content
-
-#### `final_crop_light_threshold` (integer, 0-255)
-- **Default:** `240`
-- **Purpose:** Pixel brightness above which pixels are considered "light background"
-- **Range:** `200` - `250`
-- **Lower values:** More aggressive white/light gray removal
-- **Higher values:** More conservative, only removes very white pixels
-- **Tune when:** White scanning artifacts remain or content is being removed
-
-**Examples:**
-```toml
-final_crop_light_threshold = 235  # Slightly more aggressive
-final_crop_light_threshold = 245  # More conservative
-```
-
-#### `final_crop_dark_threshold` (integer, 0-255)
-- **Default:** `40`
-- **Purpose:** Pixel darkness below which pixels are considered "dark artifacts"
-- **Range:** `20` - `80`
-- **Context:** Scanning can create dark edges (like #1f1611 = RGB 31,22,17)
-- **Higher values:** Removes more subtle dark artifacts
-- **Lower values:** Only removes very dark artifacts
-
-**Examples by scanning condition:**
-```toml
-# Clean modern scanner
-final_crop_dark_threshold = 30
-
-# Older scanner with dark edges  
-final_crop_dark_threshold = 50
-
-# Very problematic scanning artifacts
-final_crop_dark_threshold = 70
-```
-
-#### `final_crop_background_percent` (float, 0.0-1.0)
-- **Default:** `0.05` (5%)
-- **Purpose:** Minimum percentage of background pixels in column to trigger cropping
-- **Range:** `0.01` - `0.2`
-- **Lower values:** More aggressive edge removal
-- **Higher values:** More conservative edge removal
-- **Tune when:** Black bars remain or content is being cropped
 
 ### [output] - Output Format Settings
 
@@ -193,7 +148,7 @@ Controls final image format and quality.
 ```toml
 [output]
 file_format = "png"
-quality = 95
+quality = 95       # note - this is only used by jpg!
 ```
 
 #### `file_format` (string)
@@ -227,13 +182,10 @@ max_rotation = 5.0
 overlap_confidence_threshold = 0.35
 
 [cropping]
-final_crop_light_threshold = 245
-final_crop_dark_threshold = 30
-final_crop_background_percent = 0.08
+precrop_max_vertical_percent = 10
 
 [output]
 file_format = "png"
-quality = 95
 ```
 
 ### Historical/Fragile Documents
@@ -249,13 +201,10 @@ max_rotation = 8.0
 overlap_confidence_threshold = 0.20
 
 [cropping]
-final_crop_light_threshold = 235
-final_crop_dark_threshold = 60
-final_crop_background_percent = 0.03
+precrop_max_vertical_percent = 10
 
 [output]
-file_format = "tiff"
-quality = 95
+file_format = "png"
 ```
 
 ### Poor Quality Scans
@@ -272,9 +221,7 @@ overlap_confidence_threshold = 0.15
 overlap_confidence_backup = 0.10
 
 [cropping]
-final_crop_light_threshold = 230
-final_crop_dark_threshold = 70
-final_crop_background_percent = 0.02
+precrop_max_vertical_percent = 10
 
 [output]
 file_format = "png"
@@ -293,9 +240,7 @@ angle_threshold = 0.1
 max_rotation = 10.0
 
 [cropping]
-final_crop_light_threshold = 240
-final_crop_dark_threshold = 40
-final_crop_background_percent = 0.05
+precrop_max_vertical_percent = 10
 
 [output]
 file_format = "jpg"
@@ -305,18 +250,7 @@ quality = 92
 ## Troubleshooting by Symptom
 
 ### Text is being cut off
-1. Increase `final_crop_background_percent` to `0.1`
-2. Decrease `final_crop_dark_threshold` to `30`
-3. Check `precrop_max_vertical_percent` isn't too high
-
-### Black/dark edges remain
-1. Increase `final_crop_dark_threshold` to `60-80`
-2. Decrease `final_crop_background_percent` to `0.02-0.03`
-3. Check edge color with image editor and adjust threshold accordingly
-
-### White spaces remain
-1. Decrease `final_crop_light_threshold` to `235`
-2. Decrease `final_crop_background_percent` to `0.03`
+1. Check `precrop_max_vertical_percent` isn't too high
 
 ### No overlap detected
 1. Decrease `overlap_confidence_threshold` to `0.15-0.20`
