@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "document-digitizer"
+version = "0.1.0"
+description = "CLI tool for processing paired scanned handwriting images into transcribed text"
+authors = [{name = "Clive Holloway", email = "your-email@example.com"}]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "click>=8.0",
+    "opencv-python>=4.8",
+    "pillow>=10.0",
+    "rich>=13.0",
+    "numpy>=1.24",
+]
+
+[project.scripts]
+document-digitizer = "document_digitizer.cli:process"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "black>=23.0",
+    "flake8>=6.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"

@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# swap files etc
+*.sw?
+
+# output dir used in examples (for cleaniness :D)
+output/
