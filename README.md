@@ -207,3 +207,7 @@ This is the generic first part of the project.  The rest is only relevant for my
 AI code will be in [this repo](https://github.com/cliveholloway/herbert/) soon.
 
 And yes, I know I haven't included tests. I'll get around to that when I'm more familiar with Python.
+
+I have also not closely analyzed the vibe coded parts of this, so apologies if not the most efficient!
+
+cLive ;-) <clive.holloway@gmail.com>
