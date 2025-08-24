@@ -28,7 +28,7 @@ cp config.sample.toml config.toml
 # Deskew scanned images
 document-deskew input_dir output_dir -v
 
-# Stitch paired document images  
+# Stitch pairs of deskewed document images  
 document-stitch input_dir output_dir -v
 ```
 
