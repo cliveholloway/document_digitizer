@@ -40,7 +40,8 @@ Repository = "https://github.com/cliveholloway/document_digitizer"
 Issues = "https://github.com/cliveholloway/document_digitizer/issues"
 
 [project.scripts]
-document-digitizer = "cli:process"
+document-deskew = "document_digitizer.deskew:main"
+document-stitch = "document_digitizer.stitch:main"
 
 [project.optional-dependencies]
 dev = [
@@ -50,4 +51,5 @@ dev = [
 ]
 
 [tool.setuptools]
-py-modules = ["cli"]
+packages = ["document_digitizer"]
+package-dir = {"" = "src"}

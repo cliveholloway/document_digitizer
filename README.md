@@ -1,204 +1,209 @@
 # Document Digitizer
 
-A Python tool for processing paired, scanned, handwritten document images into clean, aligned digital documents. Automatically detects rotation, removes scanning artifacts, and stitches overlapping page pairs with precision text preservation.
-
-![Example](docs/example.md)
+A Python toolkit for processing scanned documents, featuring automatic deskewing and intelligent image stitching capabilities.
 
 ## Features
 
-- **Intelligent Deskewing** - Detects and corrects document rotation using multiple algorithms
-- **Artifact Removal** - Eliminates edge artifacts and rotation wedges  
-- **Precise Stitching** - Aligns overlapping page pairs with template matching
-- **Text Preservation** - No-blend stitching maintains crisp, readable text
-- **Configurable Processing** - Extensive TOML configuration for different quality documents
-- **Debug Logging** - Detailed processing logs and intermediate file saving
+- **Deskewing**: Automatically detects and corrects document rotation using advanced Hough line detection
+- **Image Stitching**: Intelligently combines paired document scans with overlap detection
+- **Multiple Formats**: Supports TIFF, PNG, JPEG, BMP, WebP, and JPEG 2000 input formats
+- **Flexible Logging**: Configurable console or file-based logging with verbose debugging
+- **Robust Processing**: Timeout protection and fallback mechanisms for reliable batch processing
 
 ## Quick Start
 
-### Installation
-
 ```bash
-# Clone the repository
+# Clone and set up virtual environment
+git clone https://github.com/cliveholloway/document_digitizer.git
+cd document_digitizer
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install the package
+pip install -e .
+
+# Copy and edit (if needed) the configuration file
+cp config.sample.toml config.toml
+
+# Deskew scanned images
+document-deskew input_dir output_dir -v
+
+# Stitch paired document images  
+document-stitch input_dir output_dir -v
+```
+
+## Installation
+
+### Requirements
+- Python 3.9+
+- OpenCV
+- NumPy  
+- Click
+- Rich
+- Pillow
+- tomli (for Python < 3.11)
+
+### Install from Source
+```bash
 git clone https://github.com/cliveholloway/document_digitizer.git
 cd document_digitizer
 
-# Create and activate virtual environment
-python3 -m venv .venv
+# Create virtual environment (recommended)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Activate virtual environment
-# On Windows:
-.venv\Scripts\activate
-# On macOS/Linux:
-source .venv/bin/activate
+# Install package
+pip install -e .
+```
 
-# Install the package and dependencies
-pip install -e .```
+## Usage
 
-### Basic Usage
+This code has two steps that batch process images:
 
-1. **Create configuration file:**
+- deskew - straighten the original scans and crop wedges after
+- stitch - join together 2 images, one above the other
+
+### Deskewing Documents
+
+The deskew tool automatically detects and corrects document rotation:
+
 ```bash
-# Copy the sample config
-cp config.sample.toml config.toml
+# Basic usage - using the installed script
+document-deskew input_folder output_folder
+
+# With verbose logging
+document-deskew input_folder output_folder -v
+
+# With custom configuration  
+document-deskew input_folder output_folder --config my_config.toml
 ```
 
-For your initial testing you can probably leave it as-is, but when running a project,
-I suggest you change the debug options:
+**Input formats supported**: TIFF, PNG, JPEG, BMP, WebP, JPEG 2000  
+**Output format**: PNG (high quality compression)
 
-```toml
-[debug]
-# Save intermediate processing images (a_precrop, b_rotated, c_deskewed, d_stitched)
-save_intermediate = true
+### Stitching Document Pairs
 
-# Logging target: "stdout" for console output, "file" for log file + minimal console
-log_target = "stdout"
-```
-Assuming the final images are fine, you can set `save_inermediate` to false, but it
-will give you a useful idea as to what the steps are, and be helpful in debugging
-problematic input pairs.
+The stitch tool combines paired document scans with intelligent overlap detection:
 
-2. **Organize your scanned images:**
-
-They will be processed in pairs, in alphabetical order.
-
-```
-input/
-├── image001.tif
-├── image002.tif  # These will be paired and stitched
-├── image003.tif
-├── image004.tif  # These will be paired and stitched
-└── ...
-```
-
-3. **Process your documents:**
 ```bash
-document-digitizer input/ output/
+# Stitch pairs of PNG images
+document-stitch input_folder output_folder -v
+
+# Images are processed in alphabetical pairs:
+# image001.png + image002.png → page001.png
+# image003.png + image004.png → page002.png
 ```
 
-4. **Results:**
+Note, naming images in pairs starting at 001 will ensure the stitched image
+reflects the source, making identifying problematic (failed) stitch source
+images. ie:
+```bash
+# image001a.png + image001b.png → page001.png
+# image002a.png + image002b.png → page002.png
 ```
-output/
-├── pair_001.png  # Processed and stitched images 1+2
-├── pair_002.png  # Processed and stitched images 3+4
-└── ...
-```
+
+**Input format**: PNG files (pairs processed alphabetically)  
+**Output format**: PNG files named `page001.png`, `page002.png`, etc.
 
 ## Configuration
 
-The tool uses a `config.toml` file for all processing parameters. See [docs/configuration.md](configuration.md) for detailed configuration options.
-
-### Sample Configuration
+Copy `config.sample.toml` to `config.toml` and adjust settings if needed:
 
 ```toml
 [debug]
-save_intermediate = true
+# "stdout" for console output, "file" for detailed log files
 log_target = "stdout"
 
-[processing]
+[deskew]
+# Minimum angle to trigger rotation (degrees)
 angle_threshold = 0.1
+
+# Maximum angle to attempt (degrees)
 max_rotation = 10.0
 
-[cropping]
-precrop_max_vertical_percent = 10
+[stitching]
+# Maximum overlap search area (pixels)
+max_y_overlap = 1500
 
-[output]
-file_format = "png"
+# Maximum horizontal offset (pixels)
+max_x_offset = 300
+
+# Confidence thresholds (0.0-1.0)
+overlap_confidence_threshold = 0.6
+overlap_confidence_backup = 0.4
 ```
 
-## Advanced Usage
+See [Configuration Guide](docs/configuration.md) for detailed explanations.
 
-### Custom Configuration
+## How It Works
+
+### Deskewing Algorithm
+
+1. **Multi-Method Analysis**: Uses probabilistic and standard Hough line detection plus projection analysis
+2. **Robust Detection**: Combines results from multiple algorithms for reliable angle detection
+3. **Smart Filtering**: Rejects obviously incorrect results and handles edge cases
+4. **Precise Rotation**: Applies mathematical rotation with intelligent cropping to remove artifacts
+
+### Stitching Algorithm
+
+1. **Template Matching**: Extracts a sample from one image and searches for it in the other
+2. **Overlap Detection**: Calculates precise Y-overlap and X-offset between images
+3. **Confidence Scoring**: Uses correlation coefficients to validate matches
+4. **Fallback Handling**: Falls back to simple concatenation when overlap detection fails
+
+## Sample Data
+
+Sample scanned documents are included in `data/sample_scans/` for testing. These are
+the first 2 of around 700 scans that inspired this project.
+
+If you want to know more, you can [read the whole journal](https://HerbertHolloway.org)
+
 ```bash
-document-digitizer input/ output/ --config custom_config.toml
+# Test deskewing with samples
+document-deskew data/sample_scans output/deskewed -v
+
+# and stitching
+document-stitch output/deskewed output/stitched -v
 ```
 
-### File Logging Mode
-Set `log_target = "file"` in config for minimal console output with detailed log files.
+## Documentation
 
-### Different Output Formats
-```toml
-[output]
-file_format = "jpg"  # or "png", "tiff"
-quality = 95         # for JPG only
-```
+- [Installation Guide](docs/installation.md) - Detailed setup instructions
+- [Configuration Guide](docs/configuration.md) - Complete configuration reference
+- [Usage Examples](docs/example.md) - Common workflows and examples
+- [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
 
-## Processing Pipeline
+## Logging
 
-1. **Pre-crop** - Remove manual rotation artifacts from scanning
-2. **Deskew** - Detect and correct text line rotation (±10°)
-3. **Math Crop** - Remove rotation wedges using trigonometry
-4. **Template Match** - Find optimal overlap between page pairs
-5. **Stitch** - Combine images with hard cut (no blending)
-6. **Final Crop** - Crop edges to remove X-axis offset, if possible.
+Both tools support flexible logging:
 
-## Debug Output
+- **Console Mode** (`log_target = "stdout"`): Progress messages to console, verbose details with `-v`
+- **File Mode** (`log_target = "file"`): Complete logs saved to files, console shows progress only
 
-With `save_intermediate = true`, the tool saves processing stages:
+Log files are saved as `deskew.log` and `stitch.log` in the output directory.
 
-```
-output/
-├── pair_001_a_page1_precrop.png    # After pre-processing
-├── pair_001_b_page1_rotated.png    # After rotation (with wedges)
-├── pair_001_c_page1_deskewed.png   # After math crop (clean)
-├── pair_001_d_stitched.png         # After stitching
-└── pair_001.png                    # Final result
-```
+## Performance Tips
 
-## Configuration Tuning
-
-### For Old/Fragile Documents
-```toml
-[processing]
-angle_threshold = 0.05  # More sensitive rotation detection
-max_rotation = 5.0      # Conservative rotation limit
-```
-
-### For Poor Quality Scans
-```toml
-[processing]
-overlap_confidence_threshold = 0.15  # More permissive matching
-```
-
-### For High Quality Documents
-```toml
-[output]
-file_format = "tiff"  # Lossless archival format
-```
-
-## Requirements
-
-- Python 3.9+
-- OpenCV 4.8+
-- NumPy 1.24+
-- Rich 13.0+ (for console output)
-- Click 8.0+ (for CLI)
-- tomli (for Python <3.11) or built-in tomllib
-
-## Troubleshooting
-
-### Common Issues
-
-**"No overlap found"** - Images don't have sufficient matching content
-- Check that pages are sequential and overlapping
-- Reduce `overlap_confidence_threshold` in config
-
-**"Angle seems too large"** - Rotation detection is finding false positives  
-- Reduce `max_rotation` to be more conservative
-- Check that images aren't severely rotated (>10°)
-
-**Text is cut off** - Cropping is too aggressive
-- Check `precrop_max_vertical_percent` isn't too high
-
-See [docs/configuration.md](configuration.md) for detailed parameter explanations.
+- **Batch Processing**: Both tools are optimized for processing many files efficiently
+- **Timeout Protection**: Deskewing includes timeout mechanisms to prevent hanging on difficult images
+- **Memory Efficiency**: Images are processed one at a time to minimize memory usage
+- **Format Optimization**: Output PNG files use high-quality compression for good file sizes
 
 ## Contributing
 
-Contributions welcome! Please read [docs/contributing.md](contributing.md) for guidelines.
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
 
 ## License
 
-[LICENSE](LICENSE)
+See LICENSE file
 
-## Acknowledgments
+## About this project
 
-Claude did the heavy lifting.
+After 30 years of coding mainly in Perl, I'm teaching myself Python and coding with LLMs.
+This is the generic first part of the project.  The rest is only relevant for my project, so the
+AI code will be in [this repo](https://github.com/cliveholloway/herbert/) soon.
+
+And yes, I know I haven't included tests. I'll get around to that when I'm more familiar with Python.

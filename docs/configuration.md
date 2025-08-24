@@ -1,287 +1,266 @@
 # Configuration Guide
 
-The Document Digitizer uses a comprehensive TOML configuration system that allows fine-tuning for different document types, scanning conditions, and quality requirements.
+The Document Digitizer uses TOML configuration files to control processing behavior. This guide explains all available settings.
 
-## Configuration File Structure
+## Configuration File Setup
 
-The `config.toml` file is organized into logical sections:
+1. **Copy the sample configuration:**
+   ```bash
+   cp config.sample.toml config.toml
+   ```
 
-```toml
-[debug]     # Debugging and logging options
-[processing]  # Core image processing parameters  
-[cropping]   # Pre-processing and final cropping settings
-[output]     # Output format and quality settings
-```
+2. **Edit the settings** for your needs
 
-## Section-by-Section Guide
+3. **Use with tools:**
+   ```bash
+   # Uses config.toml by default
+   document-deskew input output
+   
+   # Use custom config file
+   document-deskew input output --config my_settings.toml
+   ```
 
-### [debug] - Debugging and Logging
+## Configuration Sections
 
-Controls intermediate file saving and logging behavior.
+### [debug] - Logging Configuration
+
+Controls how the tools output information during processing.
 
 ```toml
 [debug]
-save_intermediate = true
 log_target = "stdout"
 ```
 
-#### `save_intermediate` (boolean)
-- **Default:** `true`
-- **Purpose:** Save intermediate processing images for debugging
-- **Files created:** `a_precrop.png`, `b_rotated.png`, `c_deskewed.png`, `d_stitched.png`
-- **When to disable:** Production runs where disk space is limited
-- **When to enable:** Debugging processing issues, understanding pipeline
+**Options:**
+- `"stdout"`: Log to console. Shows progress messages normally, detailed debug info only with `-v` flag
+- `"file"`: Log to files. Saves complete logs to `deskew.log`/`stitch.log` in output directory, shows minimal progress on console
 
-#### `log_target` (string: "stdout" | "file")  
-- **Default:** `"stdout"`
-- **Purpose:** Control where detailed logs are written
-- **"stdout":** Full detailed output to console (good for debugging)
-- **"file":** Minimal console + detailed `processing.log` file (good for production)
+**When to use:**
+- **stdout**: For interactive use, testing, or when you want to see everything in the terminal
+- **file**: For batch processing, automation, or when you need complete logs for troubleshooting
 
-**Example - Production setup:**
-```toml
-[debug]
-save_intermediate = false
-log_target = "file"
-```
+### [deskew] - Document Rotation Correction
 
-### [processing] - Core Processing Parameters
-
-Controls the main image processing algorithms.
+Controls the automatic deskewing behavior for correcting document rotation.
 
 ```toml
-[processing]
+[deskew]
 angle_threshold = 0.1
 max_rotation = 10.0
-max_y_overlap = 1400
-max_x_offset = 150
-overlap_confidence_threshold = 0.25
-overlap_confidence_backup = 0.20
 ```
 
-#### `angle_threshold` (float, degrees)
-- **Default:** `0.1`
-- **Purpose:** Minimum rotation angle to trigger deskewing
-- **Range:** `0.01` - `1.0`
-- **Lower values:** More sensitive, corrects tiny rotations
-- **Higher values:** Less sensitive, ignores minor skew
-- **Tune when:** Documents appear slightly rotated but aren't being corrected
+#### angle_threshold
+**Type:** Float (degrees)  
+**Default:** 0.1  
+**Range:** 0.01 - 5.0
+
+Minimum rotation angle required to trigger correction. Images with detected rotation below this threshold are considered "straight enough" and won't be rotated.
 
 **Examples:**
-```toml
-angle_threshold = 0.05  # Very sensitive (old documents)
-angle_threshold = 0.5   # Less sensitive (well-aligned scans)
-```
+- `0.05`: Very sensitive - corrects tiny rotations
+- `0.1`: Default - good balance of correction vs avoiding unnecessary processing  
+- `0.5`: Less sensitive - only corrects noticeable rotations
+- `1.0`: Conservative - only corrects obvious rotations
 
-#### `max_rotation` (float, degrees)
-- **Default:** `10.0`
-- **Purpose:** Maximum rotation angle to attempt correction
-- **Range:** `1.0` - `45.0`
-- **Purpose:** Prevents false positive corrections on severely rotated images
-- **Tune when:** Getting "angle seems too large" messages
+**Usage tips:**
+- Lower values: More corrections, but may "fix" images that don't need it
+- Higher values: Fewer corrections, may leave slightly skewed images uncorrected
+
+#### max_rotation
+**Type:** Float (degrees)  
+**Default:** 10.0  
+**Range:** 1.0 - 45.0
+
+Maximum rotation angle that the algorithm will attempt to correct. Larger rotations are likely detection errors and will be skipped to avoid damaging the document.
 
 **Examples:**
-```toml
-max_rotation = 5.0   # Conservative (high-quality scans)
-max_rotation = 15.0  # Aggressive (poor scanning conditions)
-```
+- `5.0`: Conservative - only fixes slight skews
+- `10.0`: Default - handles typical scanner skew
+- `15.0`: Aggressive - handles more severe rotations
+- `30.0`: Very aggressive - may attempt to fix severely rotated scans
 
-#### `max_y_overlap` (integer, pixels)
-- **Default:** `1400`
-- **Purpose:** Maximum vertical overlap to search when stitching pages
-- **Range:** `500` - `2000`
-- **Lower values:** Faster processing, works for small overlaps
-- **Higher values:** Slower processing, handles large overlaps
-- **Tune when:** Pages have very large or very small overlapping regions
+**Usage tips:**
+- Typical scanner skew: 0.1° - 5°
+- Severely skewed documents: up to 15°
+- Values above 20° risk false positives from text/image content
 
-#### `max_x_offset` (integer, pixels)
-- **Default:** `150`
-- **Purpose:** Maximum horizontal misalignment to correct when stitching
-- **Range:** `50` - `300`
-- **Accounts for:** Scanner feed variations, page positioning differences
+### [stitching] - Image Combination Settings
 
-#### `overlap_confidence_threshold` (float, 0.0-1.0)
-- **Default:** `0.25`
-- **Purpose:** Minimum matching confidence to accept overlap detection
-- **Range:** `0.1` - `0.5`
-- **Lower values:** More permissive, accepts weaker matches
-- **Higher values:** More strict, requires better matches
-- **Tune when:** Getting "No overlap found" errors
-
-**Examples by document type:**
-```toml
-# High-quality typed documents
-overlap_confidence_threshold = 0.35
-
-# Handwritten documents  
-overlap_confidence_threshold = 0.25
-
-# Poor quality/faded documents
-overlap_confidence_threshold = 0.15
-```
-
-#### `overlap_confidence_backup` (float, 0.0-1.0)
-- **Default:** `0.20`
-- **Purpose:** Fallback threshold when primary fails but position is consistent
-- **Should be:** Lower than `overlap_confidence_threshold`
-
-### [cropping] - Image Cropping Parameters
-
-Controls pre-processing and final edge artifact removal.
+Controls how paired document images are combined with overlap detection.
 
 ```toml
-[cropping]
-precrop_max_vertical_percent = 10
+[stitching]
+max_y_overlap = 1500
+max_x_offset = 300
+overlap_confidence_threshold = 0.6
+overlap_confidence_backup = 0.4
 ```
 
-#### `precrop_max_vertical_percent` (0-30)
-- **Default:** `10`
-- **Purpose:** Maximum percentage of image height to crop during pre-processing
-- **Range:** `5` - `30`
-- **Prevents:** Over-aggressive removal of manual rotation artifacts
-- **Tune when:** Pre-processing is removing too much content
+#### max_y_overlap
+**Type:** Integer (pixels)  
+**Default:** 1500  
+**Range:** 100 - 5000
 
-### [output] - Output Format Settings
+Maximum vertical overlap area to search when detecting where images connect. Larger values allow detection of bigger overlaps but increase processing time.
 
-Controls final image format and quality.
+**Examples:**
+- `500`: Fast processing, handles small overlaps (0.5-1 inch at 300 DPI)
+- `1500`: Default - handles typical book page overlaps (1.5 inches at 300 DPI)
+- `3000`: Handles large overlaps but slower processing (3 inches at 300 DPI)
 
-```toml
-[output]
-file_format = "png"
-quality = 95       # note - this is only used by jpg!
-```
+**Usage tips:**
+- Match your scanning overlap: if you overlap 1 inch, use ~300-500 pixels
+- Larger values = more thorough search but slower processing
+- Too small = may miss actual overlaps, falling back to simple concatenation
 
-#### `file_format` (string)
-- **Options:** `"png"`, `"jpg"`, `"tiff"`
-- **Default:** `"png"`
+#### max_x_offset
+**Type:** Integer (pixels)  
+**Default:** 300  
+**Range:** 50 - 1000
 
-**Format comparison:**
-- **PNG:** Lossless, good file size, recommended for most uses
-- **JPG:** Lossy compression, smallest files, use for web/sharing
-- **TIFF:** Lossless, largest files, use for archival storage
+Maximum horizontal misalignment allowed between paired images. Accounts for slight positioning differences when scanning.
 
-#### `quality` (integer, 1-100)
-- **Default:** `95`
-- **Purpose:** JPG compression quality (ignored for PNG/TIFF)
-- **Range:** `85` - `100` for document preservation
-- **Lower values:** Smaller files, visible compression artifacts
-- **Higher values:** Larger files, better quality
+**Examples:**
+- `100`: Strict alignment - requires very consistent scanning
+- `300`: Default - tolerates typical handheld scanning variations
+- `500`: Loose alignment - handles inconsistent positioning
 
-## Configuration Templates
+**Usage tips:**
+- Flatbed scanners: can use lower values (100-200)
+- Handheld scanners: need higher values (300-500)
+- Too strict = rejects valid matches
+- Too loose = accepts false matches
 
-### High-Quality Modern Documents
+#### overlap_confidence_threshold
+**Type:** Float (correlation coefficient)  
+**Default:** 0.6  
+**Range:** 0.1 - 0.95
 
+Primary confidence threshold for accepting overlap detection. Higher values require better matches but reduce false positives.
+
+**Examples:**
+- `0.4`: Lenient - accepts lower quality matches
+- `0.6`: Default - good balance of accuracy vs acceptance
+- `0.8`: Strict - only accepts high-confidence matches
+
+**Technical details:**
+- Uses normalized cross-correlation (0.0 = no match, 1.0 = perfect match)
+- Values above 0.9 are rarely achieved with real scanned documents
+- Lower values may accept false matches from repeated patterns
+
+#### overlap_confidence_backup
+**Type:** Float (correlation coefficient)  
+**Default:** 0.4  
+**Range:** 0.1 - 0.8
+
+Fallback confidence threshold used when primary threshold fails. Provides a second chance for lower-quality but potentially valid matches.
+
+**Examples:**
+- `0.3`: Very lenient fallback
+- `0.4`: Default - catches medium-quality matches the primary missed
+- `0.5`: Conservative fallback - still maintains quality
+
+**Usage tips:**
+- Should be lower than `overlap_confidence_threshold`
+- Helps with challenging documents (poor scan quality, complex layouts)
+- Set too low = more false positives
+- Set too high = may as well use single threshold
+
+## Configuration Examples
+
+### High-Quality Scans (Flatbed Scanner)
 ```toml
 [debug]
-save_intermediate = false
-log_target = "file"
-
-[processing]
-angle_threshold = 0.1
-max_rotation = 5.0
-overlap_confidence_threshold = 0.35
-
-[cropping]
-precrop_max_vertical_percent = 10
-
-[output]
-file_format = "png"
-```
-
-### Historical/Fragile Documents
-
-```toml
-[debug]
-save_intermediate = true
 log_target = "stdout"
 
-[processing]
-angle_threshold = 0.05
-max_rotation = 8.0
-overlap_confidence_threshold = 0.20
+[deskew]
+angle_threshold = 0.05  # Very precise
+max_rotation = 5.0      # Conservative limit
 
-[cropping]
-precrop_max_vertical_percent = 10
-
-[output]
-file_format = "png"
+[stitching]
+max_y_overlap = 1000    # Consistent overlaps
+max_x_offset = 150      # Precise alignment
+overlap_confidence_threshold = 0.7  # High quality
+overlap_confidence_backup = 0.5
 ```
 
-### Poor Quality Scans
-
+### Mobile/Handheld Scanning
 ```toml
 [debug]
-save_intermediate = true
-log_target = "stdout"
+log_target = "file"  # Save logs for review
 
-[processing]
-angle_threshold = 0.2
-max_rotation = 15.0
-overlap_confidence_threshold = 0.15
-overlap_confidence_backup = 0.10
+[deskew]
+angle_threshold = 0.2   # Less sensitive
+max_rotation = 15.0     # Handle more skew
 
-[cropping]
-precrop_max_vertical_percent = 10
-
-[output]
-file_format = "png"
-quality = 95
+[stitching]
+max_y_overlap = 2000    # Variable overlaps
+max_x_offset = 500      # Loose alignment
+overlap_confidence_threshold = 0.5  # Lower quality
+overlap_confidence_backup = 0.35
 ```
 
-### Production/Batch Processing
-
+### Batch Processing
 ```toml
 [debug]
-save_intermediate = false
-log_target = "file"
+log_target = "file"  # Complete logs
 
-[processing]
+[deskew]
 angle_threshold = 0.1
 max_rotation = 10.0
 
-[cropping]
-precrop_max_vertical_percent = 10
-
-[output]
-file_format = "jpg"
-quality = 92
+[stitching]
+max_y_overlap = 1500
+max_x_offset = 300
+overlap_confidence_threshold = 0.6
+overlap_confidence_backup = 0.4
 ```
 
-## Troubleshooting by Symptom
+### Troubleshooting/Debug Mode
+```toml
+[debug]
+log_target = "stdout"  # See everything in console
 
-### Text is being cut off
-1. Check `precrop_max_vertical_percent` isn't too high
+[deskew]
+angle_threshold = 0.05  # Catch small rotations
+max_rotation = 20.0     # Don't skip potential issues
 
-### No overlap detected
-1. Decrease `overlap_confidence_threshold` to `0.15-0.20`
-2. Decrease `overlap_confidence_backup` to `0.10`
-3. Verify pages actually have overlapping content
+[stitching]
+max_y_overlap = 2500    # Thorough search
+max_x_offset = 400      # Accept more variation
+overlap_confidence_threshold = 0.5  # Lower bar
+overlap_confidence_backup = 0.3     # Very permissive
+```
 
-### False rotation detection
-1. Increase `angle_threshold` to `0.2-0.5`
-2. Decrease `max_rotation` to `5.0`
+## Performance vs Quality Trade-offs
 
-### Rotation not being corrected
-1. Decrease `angle_threshold` to `0.05`
-2. Increase `max_rotation` to `15.0`
+### Faster Processing
+- Increase `angle_threshold` (fewer rotations processed)
+- Decrease `max_y_overlap` (smaller search areas)
+- Decrease `max_x_offset` (less alignment checking)
+- Use `log_target = "file"` (less console output)
 
-## Advanced Configuration
+### Higher Quality Results
+- Decrease `angle_threshold` (catch subtle rotations)
+- Increase `max_y_overlap` (more thorough overlap search)
+- Increase `overlap_confidence_threshold` (stricter matching)
+- Use `log_target = "stdout"` with `-v` flag (see what's happening)
 
-### Custom Scanning Setups
+## Validation and Testing
 
-For specialized scanning equipment or unusual document conditions, you may need to experiment with parameters outside the recommended ranges. Always test with a small sample first.
+Test your configuration with sample documents:
 
-### Debugging Workflow
+```bash
+# Test deskewing with different thresholds
+document-deskew sample_scans test_output -v
 
-1. Start with `save_intermediate = true` and `log_target = "stdout"`
-2. Process a single pair to understand what's happening
-3. Examine intermediate files to identify issues
-4. Adjust relevant parameters
-5. Disable debugging for production runs
+# Test stitching with different confidence levels
+python -m document_digitizer.stitch sample_pairs test_output -v
+```
 
-### Performance Considerations
+Monitor the logs to see:
+- How many images are being rotated vs skipped
+- Confidence scores of successful/failed stitches
+- Processing times per image
 
-- `save_intermediate = false` saves disk space and processing time
-- `log_target = "file"` reduces console noise in batch processing
-- Lower `max_y_overlap` and `max_x_offset` speed up overlap detection
-- JPG output significantly reduces file sizes for large batches
+Adjust settings based on results and your document types.
