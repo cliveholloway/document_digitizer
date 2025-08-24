@@ -6,7 +6,7 @@ import sys
 import time
 
 # Import shared logging utility
-from logging_utils import setup_script_logging
+from .logging_utils import setup_script_logging, get_script_logger
 
 # Try to import tomllib (Python 3.11+) or fallback to tomli
 try:
@@ -38,7 +38,7 @@ def load_config(config_path=None):
         with open(config_path, "rb") as f:
             return tomllib.load(f)
     except Exception as e:
-        print(f"Error loading config: {e}")
+        print("Error loading config: %s", e)
         print("Copy config.sample.toml to config.toml and edit as appropriate")
         sys.exit(1)
 
@@ -55,37 +55,34 @@ def load_config(config_path=None):
 def main(input_dir, output_dir, config, verbose):
     """Deskew scanned document images."""
 
-    # Early messages before logging is set up
-    print(f"Starting deskew script...")
-    print(f"Input directory: {input_dir}")
-    print(f"Output directory: {output_dir}")
-
     # Load configuration
     try:
         config_data = load_config(config)
-        print("✓ Configuration loaded successfully")
     except Exception as e:
-        print(f"✗ Failed to load configuration: {e}")
-        return
-
-    # Create output directory
-    try:
-        output_dir.mkdir(parents=True, exist_ok=True)
-        print(f"✓ Output directory created: {output_dir}")
-    except Exception as e:
-        print(f"✗ Failed to create output directory: {e}")
+        print("✗ Failed to load configuration: %s", e)
         return
 
     # Setup logging using shared utility
     global logger
     logger = setup_script_logging(SCRIPT_NAME, config_data, output_dir, verbose)
 
-    logger.info(f"Input directory: {input_dir}")
-    logger.info(f"Output directory: {output_dir}")
-    logger.info(f"Log target: {config_data['debug']['log_target']}")
+    logger.info("Starting deskew script...")
+    logger.info("Input directory: %s", input_dir)
+    logger.info("Output directory: %s", output_dir)
+    logger.info("Log target: %s", config_data['debug']['log_target'])
     logger.info(
-        f"Deskew config: angle_threshold={config_data['deskew']['angle_threshold']}°, max_rotation={config_data['deskew']['max_rotation']}°"
+        "Deskew config: angle_threshold=%s°, max_rotation=%s°",
+        config_data["deskew"]["angle_threshold"],
+        config_data["deskew"]["max_rotation"],
     )
+
+    # Create output directory
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        logger.debug("✓ Output directory created: %s", output_dir)
+    except OSError:
+        logger.error("✗ Failed to create output directory: %s", exc_info=True)
+        return
 
     # Find image files (multiple formats supported)
     logger.info("Scanning for image files...")
@@ -105,16 +102,16 @@ def main(input_dir, output_dir, config, verbose):
         for file in input_dir.iterdir():
             if file.suffix.lower() in image_extensions:
                 image_files.append(file)
-                logger.debug(f"  Found: {file.name}")
-    except Exception as e:
-        logger.error(f"Error scanning input directory: {e}")
+                logger.debug("  Found: %s", file.name)
+    except OSError:
+        logger.error("Error scanning input directory", exc_info=True)
         return
 
     image_files.sort()  # Alphabetical ordering
 
     if not image_files:
         logger.error("No image files found in input directory")
-        logger.error(f"Looking for files with extensions: {image_extensions}")
+        logger.error("Looking for files with extensions: %s", image_extensions)
         return
 
     # Group files by extension for summary
@@ -126,37 +123,46 @@ def main(input_dir, output_dir, config, verbose):
     summary = ", ".join(
         [f"{count} {ext}" for ext, count in sorted(extension_counts.items())]
     )
-    logger.debug(f"Found {len(image_files)} image files: {summary}")
+    logger.debug(
+        "Found %s image files: %s",
+        len(image_files),
+        summary
+    )
 
     # Process each image individually
     processed_count = 0
     failed_count = 0
 
     for i, image_file in enumerate(image_files, 1):
-        file_msg = f"Processing {i}/{len(image_files)}: {image_file.name}"
-        logger.info(file_msg)
-        logger.debug(f"\n{file_msg}")
+        logger.info(
+            "Processing %s/%s: %s",
+            i, len(image_files), image_file.name,
+        )
 
         start_time = time.time()
 
         try:
             # Load image with OpenCV
-            logger.debug(f"  Loading image: {image_file}")
+            logger.debug("  Loading image: %s", image_file)
             img = cv2.imread(str(image_file))
 
             if img is None:
-                logger.error(f"  Could not load image: {image_file}")
+                logger.error("  Could not load image: %s", image_file)
                 failed_count += 1
                 continue
 
-            logger.debug(f"  ✓ Loaded image: {img.shape[1]}x{img.shape[0]} pixels")
+            logger.debug(
+                "  ✓ Loaded image: %sx%s pixels",
+                img.shape[1],
+                img.shape[0],
+            )
 
             # Deskew the image
-            logger.debug(f"  Analyzing skew...")
+            logger.debug("  Analyzing skew...")
             deskewed_img, angle, crop_pixels = deskew_image(img, config_data["deskew"])
 
             # Save final result as PNG (converts from any input format)
-            logger.debug(f"  Saving final image...")
+            logger.debug("  Saving final image...")
             final_path = output_dir / f"{image_file.stem}.png"
 
             # Use high quality PNG compression
@@ -164,30 +170,26 @@ def main(input_dir, output_dir, config, verbose):
 
             elapsed_time = time.time() - start_time
             input_format = image_file.suffix.upper()
-            final_msg = f"✓ Completed in {elapsed_time:.2f}s - {input_format}→PNG - angle: {angle:.3f}°, crop: {crop_pixels}px - saved as {final_path.name}"
-            logger.info(final_msg)
-            logger.debug(f"  {final_msg}")
+            logger.info(
+                "  ✓ Completed in %.2fs - %s→PNG - angle: %.3f°, crop: %spx - saved as %s",
+                elapsed_time, input_format, angle, crop_pixels, final_path.name
+            )
             processed_count += 1
 
         except Exception as e:
             elapsed_time = time.time() - start_time
-            error_msg = (
-                f"✗ Error processing {image_file.name} after {elapsed_time:.2f}s: {e}"
+            logger.error("✗ Error processing %s after %.2fs",
+                image_file.name, elapsed_time, exc_info=True
             )
-            logger.error(error_msg)
-            logger.debug(f"  {error_msg}")
-            import traceback
-
-            logger.debug(traceback.format_exc())
             failed_count += 1
             continue
 
     # Summary
-    logger.info(f"\n✨ Processing complete!")
-    logger.info(f"Successfully processed: {processed_count} files")
+    logger.info("\n✨ Processing complete!")
+    logger.info("Successfully processed: %s files", processed_count)
     if failed_count > 0:
-        logger.error(f"Failed to process: {failed_count} files")
-    logger.info(f"Results saved to: {output_dir}")
+        logger.error("Failed to process: %s files", failed_count)
+    logger.info("Results saved to: %s", output_dir)
 
 
 def deskew_image(img_array, processing_config):
@@ -198,7 +200,7 @@ def deskew_image(img_array, processing_config):
     angle_threshold = processing_config["angle_threshold"]
     max_rotation = processing_config["max_rotation"]
 
-    logger.debug(f"    Analyzing image for skew...")
+    logger.debug("    Analyzing image for skew...")
 
     # Convert to grayscale
     if len(img_array.shape) == 3:
@@ -210,29 +212,31 @@ def deskew_image(img_array, processing_config):
     try:
         detected_angle = detect_rotation_angle(gray)
     except Exception as e:
-        logger.error(f"    Error in angle detection: {e}")
+        logger.error("    Error in angle detection: %s", e)
         return img_array, 0.0, 0
 
     if detected_angle is None:
-        logger.debug(f"    No significant rotation detected")
+        logger.debug("    No significant rotation detected")
         return img_array, 0.0, 0
 
-    logger.debug(f"    Detected angle: {detected_angle:.3f}°")
+    logger.debug("    Detected angle: %.3f°", detected_angle)
 
     if abs(detected_angle) < angle_threshold:
         logger.debug(
-            f"    Angle {detected_angle:.3f}° < threshold {angle_threshold}°. Skipping rotation."
+            "    Angle %.3f° < threshold %s. Skipping rotation.",
+            detected_angle, angle_threshold,
         )
         return img_array, detected_angle, 0
 
     if abs(detected_angle) > max_rotation:
         logger.debug(
-            f"    Angle {detected_angle:.3f}° > max rotation {max_rotation}°, skipping to avoid overcorrection."
+            "    Angle %.3f° > max rotation %s°, skipping to avoid overcorrection.",
+            detected_angle, max_rotation,
         )
         return img_array, detected_angle, 0
 
     # Rotate the image
-    logger.debug(f"    Rotating image by {detected_angle:.3f}°...")
+    logger.debug("    Rotating image by %.3f°...", detected_angle)
 
     h, w = img_array.shape[:2]
     center = (w // 2, h // 2)
@@ -267,15 +271,17 @@ def deskew_image(img_array, processing_config):
                 crop_y : h - crop_y, :
             ]  # Only crop top/bottom, keep full width
             logger.debug(
-                f"    ✓ Rotated by {detected_angle:.3f}° and cropped {crop_y}px from top/bottom"
+                "    ✓ Rotated by %.3f° and cropped %spx from top/bottom",
+                detected_angle, crop_y
             )
             logger.debug(
-                f"    ✓ Final size: {w}x{h} → {cropped.shape[1]}x{cropped.shape[0]}"
+                "    ✓ Final size: %sx%s → %sx%s",
+                w, h, cropped.shape[1], cropped.shape[0],
             )
             return cropped, detected_angle, crop_y
 
     # Fallback: return uncropped rotation
-    logger.debug(f"    ✓ Rotated by {detected_angle:.3f}° (no crop applied)")
+    logger.debug("    ✓ Rotated by %.3f° (no crop applied)", detected_angle)
     return rotated, detected_angle, 0
 
 
@@ -292,17 +298,20 @@ def detect_rotation_angle(gray, timeout_seconds=10):
     # Use conservative edge detection
     edges = cv2.Canny(blurred, 50, 150, apertureSize=3)
 
-    logger.debug(f"    Image shape: {gray.shape}, Edge pixels: {np.sum(edges > 0)}")
+    logger.debug(
+        "    Image shape: %s, Edge pixels: %s",
+        gray.shape, np.sum(edges > 0),
+    )
 
     # Try multiple detection methods with timeout checking
     methods_tried = []
 
     # Method 1: Conservative probabilistic Hough
     if time.time() - start_time > timeout_seconds:
-        logger.warning(f"    Timeout reached, using partial results")
+        logger.warning("    Timeout reached, using partial results")
         return None
 
-    logger.debug(f"    Method 1: Conservative probabilistic Hough...")
+    logger.debug("    Method 1: Conservative probabilistic Hough...")
     angle1 = try_probabilistic_hough_conservative(edges)
     if angle1 is not None:
         methods_tried.append(("Conservative Prob", angle1))
@@ -310,55 +319,56 @@ def detect_rotation_angle(gray, timeout_seconds=10):
     # Method 2: Aggressive probabilistic Hough
     if time.time() - start_time > timeout_seconds:
         if methods_tried:
-            logger.warning(f"    Timeout reached, using available results")
+            logger.warning("    Timeout reached, using available results")
             return methods_tried[0][1]
         return None
 
-    logger.debug(f"    Method 2: Aggressive probabilistic Hough...")
+    logger.debug("    Method 2: Aggressive probabilistic Hough...")
     angle2 = try_probabilistic_hough_aggressive(edges)
     if angle2 is not None:
         methods_tried.append(("Aggressive Prob", angle2))
 
     # Method 3: Standard Hough (skip if we already have good results)
     if len(methods_tried) < 2 and time.time() - start_time <= timeout_seconds:
-        logger.debug(f"    Method 3: Standard Hough...")
+        logger.debug("    Method 3: Standard Hough...")
         angle3 = try_standard_hough(edges)
         if angle3 is not None:
             methods_tried.append(("Standard", angle3))
 
     # Method 4: Projection method (only if no other methods worked)
     if not methods_tried and time.time() - start_time <= timeout_seconds:
-        logger.debug(f"    Method 4: Projection profile (simplified)...")
+        logger.debug("    Method 4: Projection profile (simplified)...")
         angle4 = try_projection_method_simple(gray)
         if angle4 is not None:
             methods_tried.append(("Projection", angle4))
 
     if not methods_tried:
-        logger.error(f"    No method detected any angles!")
+        logger.error("    No method detected any angles!")
         return None
 
     # Display all results
-    logger.debug(f"    Results from {len(methods_tried)} methods:")
+    logger.debug("    Results from  methods: %s", len(methods_tried))
     for method, angle in methods_tried:
-        logger.debug(f"      {method}: {angle:.3f}°")
+        logger.debug("      %s: %.3f°", method, angle)
 
     # Choose the best result
     if len(methods_tried) == 1:
         final_angle = methods_tried[0][1]
-        logger.info(f"    Using only available result: {final_angle:.3f}°")
+        logger.info("    Using only available result: %.3f°", final_angle)
     else:
         # Filter out any obviously wrong results (> 15°)
         reasonable_angles = [(m, a) for m, a in methods_tried if abs(a) <= 15]
 
         if not reasonable_angles:
-            logger.info(f"    All detected angles > 15°, skipping")
+            logger.info("    All detected angles > 15°, skipping")
             return None
 
         # If multiple reasonable results, take median
         angles = [a for _, a in reasonable_angles]
         final_angle = np.median(angles)
         logger.info(
-            f"    Using median of {len(reasonable_angles)} reasonable results: {final_angle:.3f}°"
+            "    Using median of %s reasonable results: %.3f°",
+            len(reasonable_angles), final_angle,
         )
 
     return final_angle
@@ -377,7 +387,7 @@ def try_probabilistic_hough_conservative(edges):
         )
         return process_hough_lines(lines, "conservative")
     except Exception as e:
-        logger.error(f"      Error in conservative Hough: {e}")
+        logger.error("      Error in conservative Hough: %s", e)
         return None
 
 
@@ -394,14 +404,14 @@ def try_probabilistic_hough_aggressive(edges):
         )
         return process_hough_lines(lines, "aggressive")
     except Exception as e:
-        logger.error(f"      Error in aggressive Hough: {e}")
+        logger.error("      Error in aggressive Hough: %s", e)
         return None
 
 
 def process_hough_lines(lines, method_name):
     """Process Hough lines to extract rotation angle."""
     if lines is None:
-        logger.debug(f"      No lines found with {method_name} method")
+        logger.debug("      No lines found with %s method", method_name)
         return None
 
     # Limit processing to first 100 lines to prevent hanging
@@ -428,7 +438,8 @@ def process_hough_lines(lines, method_name):
             angles.append(angle)
 
     logger.debug(
-        f"      Found {len(angles)} valid lines with {method_name} method (from {len(lines_to_process)} total)"
+        "      Found %s valid lines with %s method (from %s total)",
+        len(angles), method_name, len(lines_to_process),
     )
 
     if len(angles) >= 2:
@@ -440,12 +451,13 @@ def process_hough_lines(lines, method_name):
 
         final_median = np.median(filtered_angles)
         logger.info(
-            f"      {method_name.capitalize()} result: {final_median:.3f}° from {len(filtered_angles)} lines"
+            "      %s result: %.3f° from %s lines",
+            method_name.capitalize(), final_median, len(filtered_angles),
         )
 
         return final_median
 
-    logger.info(f"      Not enough valid lines for {method_name} method")
+    logger.info("      Not enough valid lines for %s method", method_name)
     return None
 
 
@@ -478,7 +490,8 @@ def try_standard_hough(edges):
 
             if lines is not None and len(lines) >= 3:
                 logger.debug(
-                    f"      Standard Hough found {len(lines)} lines with threshold {threshold}"
+                    "      Standard Hough found %s lines with threshold %s",
+                    len(lines), threshold,
                 )
 
                 # Limit processing to prevent hanging
@@ -496,14 +509,15 @@ def try_standard_hough(edges):
                     )
                     median_angle = np.median(filtered_angles)
                     logger.debug(
-                        f"      Standard result: {median_angle:.3f}° from {len(filtered_angles)} lines"
+                        "      Standard result: %.3f° from %s lines",
+                        median_angle, len(filtered_angles),
                     )
                     return median_angle
 
-        logger.debug(f"      Standard Hough found no suitable lines")
+        logger.debug("      Standard Hough found no suitable lines")
         return None
     except Exception as e:
-        logger.error(f"      Error in standard Hough: {e}")
+        logger.error("      Error in standard Hough: %s", e)
         return None
 
 
@@ -517,7 +531,7 @@ def try_projection_method_simple(gray):
         best_angle = 0
         best_score = 0
 
-        logger.debug(f"      Testing {len(angles_to_try)} angles (simplified)...")
+        logger.debug("      Testing %s angles (simplified)...", len(angles_to_try))
 
         for angle in angles_to_try:
             # Rotate image (smaller image for speed)
@@ -542,17 +556,18 @@ def try_projection_method_simple(gray):
                     best_angle = angle
 
         logger.debug(
-            f"      Best projection angle: {best_angle:.3f}° (score: {best_score:.0f})"
+            "      Best projection angle: %.3f° (score: %.0f)",
+            best_angle, best_score,
         )
 
         if best_score > 100:  # Lower threshold for simplified method
             return best_angle
         else:
-            logger.debug(f"      Projection score too low ({best_score:.0f} < 100)")
+            logger.debug("      Projection score too low (%.0f < 100)", best_score)
             return None
 
     except Exception as e:
-        logger.error(f"      Error in projection method: {e}")
+        logger.error("      Error in projection method: %s", e)
         return None
 
 
