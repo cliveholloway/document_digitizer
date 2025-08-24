@@ -6,7 +6,7 @@ import sys
 import time
 
 # Import shared logging utility
-from logging_utils import setup_script_logging, get_script_logger
+from .logging_utils import setup_script_logging, get_script_logger
 
 # Try to import tomllib (Python 3.11+) or fallback to tomli
 try:
@@ -45,41 +45,46 @@ def load_config(config_path=None):
 @click.option(
     "--verbose", "-v", is_flag=True, help="Enable verbose output for debugging"
 )
+
 def main(input_dir, output_dir, config, verbose):
     """Stitch paired document images together."""
-
-    # Early messages before logging is set up
-    print(f"Starting image stitching script...")
-    print(f"Input directory: {input_dir}")
-    print(f"Output directory: {output_dir}")
 
     # Load configuration
     try:
         config_data = load_config(config)
-        print("✓ Configuration loaded successfully")
     except Exception as e:
-        print(f"✗ Failed to load configuration: {e}")
-        return
-
-    # Create output directory
-    try:
-        output_dir.mkdir(parents=True, exist_ok=True)
-        print(f"✓ Output directory created: {output_dir}")
-    except Exception as e:
-        print(f"✗ Failed to create output directory: {e}")
+        print(f"✗ Failed to load configuration: %s", e)
         return
 
     # Setup logging using shared utility
     logger = setup_script_logging(SCRIPT_NAME, config_data, output_dir, verbose)
 
-    logger.info(f"Input directory: {input_dir}")
-    logger.info(f"Output directory: {output_dir}")
-    logger.info(f"Log target: {config_data['debug']['log_target']}")
+    logger.info("Starting image stitching script...")
+    logger.info("Input directory: %s", input_dir)
+    logger.info("Output directory: %s", output_dir)
+
+    # Create output directory
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        logger.debug("✓ Output directory created: %s", output_dir)
+    except Exception as e:
+        logger.error("✗ Failed to create output directory: %s", e)
+        return
+
+    logger.info("Input directory: %s", input_dir)
+    logger.info(f"Output directory: %s", output_dir)
+    logger.info(f"Log target: %s", config_data['debug']['log_target'])
+
     logger.info(
-        f"Stitching config: max_y_overlap={config_data['stitching']['max_y_overlap']}px, max_x_offset={config_data['stitching']['max_x_offset']}px"
+        "Stitching config: max_y_overlap=%spx, max_x_offset=%spx",
+        config_data["stitching"]["max_y_overlap"],
+        config_data["stitching"]["max_x_offset"],
     )
+
     logger.info(
-        f"Confidence thresholds: primary={config_data['stitching']['overlap_confidence_threshold']}, backup={config_data['stitching']['overlap_confidence_backup']}"
+        "Confidence thresholds: primary=%s, backup=%s",
+        config_data["stitching"]["overlap_confidence_threshold"],
+        config_data["stitching"]["overlap_confidence_backup"],
     )
 
     # Find image files
@@ -90,16 +95,15 @@ def main(input_dir, output_dir, config, verbose):
         for file in input_dir.iterdir():
             if file.suffix.lower() == ".png":
                 image_files.append(file)
-                logger.debug(f"  Found: {file.name}")
+                logger.debug("  Found: %s", file.name)
     except Exception as e:
-        logger.error(f"Error scanning input directory: {e}")
+        logger.error("Error scanning input directory: %s", e)
         return
 
     image_files.sort()  # Alphabetical ordering
 
     if not image_files:
         logger.error("No PNG image files found in input directory")
-        logger.error(f"Looking for files with extension: .png")
         return
 
     # Pair them up
@@ -109,78 +113,86 @@ def main(input_dir, output_dir, config, verbose):
             pairs.append((image_files[i], image_files[i + 1]))
         else:
             logger.warning(
-                f"Odd number of files - skipping last file: {image_files[i].name}"
+                "Odd number of files - skipping last file: %s",
+                image_files[i].name,
             )
 
     if not pairs:
         logger.error("Need at least 2 images to create pairs")
         return
 
-    logger.info(f"Found {len(image_files)} image files, created {len(pairs)} pairs")
+    logger.info(
+        "Found %s image files, created %s pairs",
+        len(image_files), len(pairs), 
+    )
     for i, (file1, file2) in enumerate(pairs, 1):
-        logger.debug(f"  Pair {i}: {file1.name} + {file2.name}")
+        logger.debug(
+            "  Pair %s: %s + %s",
+            i, file1.name, file2.name,
+        )
 
     # Process each pair
     processed_count = 0
     failed_count = 0
 
     for i, (file1, file2) in enumerate(pairs, 1):
-        pair_msg = f"Processing pair {i}/{len(pairs)}: {file1.name} + {file2.name}"
-        logger.info(pair_msg)
-        logger.debug(f"\n{pair_msg}")
+        logger.info(
+            "Processing pair %s/%s: %s + %s",
+            i, len(pairs), file1.name, file2.name,
+        )
 
         start_time = time.time()
 
         try:
             # Load images with OpenCV
-            logger.debug(f"  Loading images...")
+            logger.debug("  Loading images...")
             img1 = cv2.imread(str(file1))  # Top page
             img2 = cv2.imread(str(file2))  # Bottom page
 
             if img1 is None or img2 is None:
-                logger.error(f"  Could not load one or both images")
+                logger.error("  Could not load one or both images")
                 failed_count += 1
                 continue
 
             logger.debug(
-                f"  ✓ Loaded images: {img1.shape[1]}x{img1.shape[0]} (top page) and {img2.shape[1]}x{img2.shape[0]} (bottom page)"
+                "  ✓ Loaded images: %sx%s (top page) and %sx%s (bottom page)",
+                img1.shape[1], img1.shape[0], img2.shape[1], img2.shape[0],
             )
 
             # Stitch the images - put top page (img1) on top, bottom page (img2) on bottom
             logger.debug(
-                f"  Stitching images (top page on top, bottom page on bottom):"
+                "  Stitching images (top page on top, bottom page on bottom):"
             )
             stitched_img, overlap_info = stitch_images(img1, img2, config_data)
 
             # Save final stitched result
-            logger.debug(f"  Saving stitched image...")
+            logger.debug("  Saving stitched image...")
             page_num_str = f"{i:03d}"
             final_path = output_dir / f"page{page_num_str}.png"
             cv2.imwrite(str(final_path), stitched_img)
 
             elapsed_time = time.time() - start_time
-            final_msg = f"✓ Completed in {elapsed_time:.2f}s - {overlap_info} - saved as {final_path.name}"
-            logger.info(final_msg)
-            logger.debug(f"  {final_msg}")
+            logger.info(
+                "✓ Completed in %.2fs - %s - saved as %s",
+                elapsed_time, overlap_info, final_path.name,
+            )
             processed_count += 1
 
         except Exception as e:
             elapsed_time = time.time() - start_time
-            error_msg = f"✗ Error processing pair {i} after {elapsed_time:.2f}s: {e}"
-            logger.error(error_msg)
-            logger.debug(f"  {error_msg}")
-            import traceback
-
-            logger.debug(traceback.format_exc())
+            logger.error(
+                "✗ Error processing pair %s after %.2fs",
+                i, elapsed_time, exc_info=True,
+            )
             failed_count += 1
             continue
 
     # Summary
-    logger.info(f"\n✨ Stitching complete!")
-    logger.info(f"Successfully processed: {processed_count} pairs")
+    logger.info("\n✨ Stitching complete!")
+    logger.info("Successfully processed: %s pairs", processed_count)
     if failed_count > 0:
-        logger.error(f"Failed to process: {failed_count} pairs")
-    logger.info(f"Results saved to: {output_dir}")
+        logger.error("Failed to process: %s pairs", failed_count)
+    logger.info("Results saved to: %s", output_dir)
 
 
 def stitch_images(top_img, bottom_img, config):
@@ -193,20 +205,21 @@ def stitch_images(top_img, bottom_img, config):
     h1, w1 = top_img.shape[:2]
     h2, w2 = bottom_img.shape[:2]
 
-    logger.debug(f"    Image 1 (top): {w1}x{h1}")
-    logger.debug(f"    Image 2 (bottom): {w2}x{h2}")
+    logger.debug("    Image 1 (top): %sx%s", w1, h1)
+    logger.debug("    Image 2 (bottom): %sx%s", w2, h2)
 
     # Find the best overlap using template matching
     overlap_result = find_overlap_between_images(top_img, bottom_img, config)
 
     if overlap_result is None:
-        logger.debug(f"    No good overlap found, using simple concatenation")
+        logger.debug("    No good overlap found, using simple concatenation")
         stitched = concatenate_images(top_img, bottom_img)
         return stitched, "concatenated (no overlap detected)"
 
     y_overlap, x_offset, confidence = overlap_result
     logger.debug(
-        f"    Overlap found: Y={y_overlap}px, X={x_offset}px (confidence: {confidence:.3f})"
+        "    Overlap found: Y=%spx, X=%spx (confidence: %.3f)",
+        y_overlap, x_offset, confidence,
     )
 
     # Create stitched image directly without any scaling
@@ -250,7 +263,8 @@ def find_overlap_between_images(top_img, bottom_img, config):
     template = bottom_gray[0:template_height, template_x_start:template_x_end]
 
     logger.debug(
-        f"    Template: {template.shape[1]}x{template.shape[0]} from bottom image at x={template_x_start}-{template_x_end}"
+        "    Template: %sx%s from bottom image at x=%s-%s",
+        template.shape[1], template.shape[0], template_x_start, template_x_end,
     )
 
     # Search area in top image - bottom portion only (use config value)
@@ -258,7 +272,8 @@ def find_overlap_between_images(top_img, bottom_img, config):
     search_area = top_gray[-search_height:, :]
 
     logger.debug(
-        f"    Search area: {search_area.shape[1]}x{search_area.shape[0]} (bottom {search_height}px of top image)"
+        "    Search area: %sx%s (bottom %spx of top image)",
+        search_area.shape[1], search_area.shape[0], search_height,
     )
 
     # Perform template matching
@@ -267,7 +282,8 @@ def find_overlap_between_images(top_img, bottom_img, config):
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
 
         logger.debug(
-            f"    Template matching: max_val={max_val:.3f} at location {max_loc}"
+            "    Template matching: max_val=%.3f at location %s",
+            max_val, max_loc,
         )
 
         # Convert match location to actual overlap parameters
@@ -282,40 +298,46 @@ def find_overlap_between_images(top_img, bottom_img, config):
         x_offset = match_center_x - template_center_x
 
         logger.debug(
-            f"    Calculated overlap: Y={y_overlap}px, X={x_offset}px (confidence: {max_val:.3f})"
+            "    Calculated overlap: Y=%spx, X=%spx (confidence: %.3f)",
+            y_overlap, x_offset, max_val,
         )
         logger.debug(
-            f"    Template center: {template_center_x}, Match center: {match_center_x}, Offset: {x_offset}"
+            "    Template center: %s, Match center: %s, Offset: %s",
+            template_center_x, match_center_x, x_offset,
         )
 
         # Check if X offset is within acceptable range
         if abs(x_offset) > max_x_offset:
             logger.debug(
-                f"    ✗ X offset {x_offset}px exceeds maximum {max_x_offset}px - rejecting match"
+                "    ✗ X offset %spx exceeds maximum %spx - rejecting match",
+                x_offset, max_x_offset,
             )
             return None
 
         # Check if confidence is good enough
         if max_val > confidence_threshold:
             logger.debug(
-                f"    ✓ Good match found: Y={y_overlap}px, X={x_offset}px (confidence: {max_val:.3f})"
+                "    ✓ Good match found: Y=%spx, X=%spx (confidence: %.3f)",
+                y_overlap, x_offset, max_val,
             )
             return y_overlap, x_offset, max_val
         elif max_val > backup_threshold:
             logger.warning(
-                f"    ⚠ Acceptable match found: Y={y_overlap}px, X={x_offset}px (confidence: {max_val:.3f})"
+                "    ⚠ Acceptable match found: Y=%spx, X=%spx (confidence: %.3f)",
+                y_overlap, x_offset, max_val,
             )
             return y_overlap, x_offset, max_val
         else:
             logger.debug(
-                f"    ✗ Match confidence too low: {max_val:.3f} < {confidence_threshold}"
+                "    ✗ Match confidence too low: %.3f < %s",
+                max_val,
+                confidence_threshold,
             )
             return None
 
-    except Exception as e:
-        logger.error(f"    Template matching failed: {e}")
+    except Exception:
+        logger.error("    Template matching failed", exc_info=True)
         return None
-
 
 def create_stitched_image(top_img, bottom_img, y_overlap, x_offset):
     """
@@ -341,9 +363,13 @@ def create_stitched_image(top_img, bottom_img, y_overlap, x_offset):
     # Create white canvas
     stitched = np.ones((canvas_height, canvas_width, 3), dtype=np.uint8) * 255
 
-    logger.debug(f"    Canvas size: {canvas_width}x{canvas_height}")
-    logger.debug(f"    Top image position: ({top_x_start}, 0)")
-    logger.debug(f"    Bottom image position: ({bottom_x_start}, {top_h - y_overlap})")
+    logger.debug("    Canvas size: %sx%s", canvas_width, canvas_height)
+    logger.debug("    Top image position: (%s, 0)", top_x_start)
+    logger.debug(
+        "    Bottom image position: (%s, %s)",
+        bottom_x_start, top_h - y_overlap,
+    )
+
 
     # Place top image completely first
     stitched[:top_h, top_x_start : top_x_start + top_w] = top_img
@@ -355,7 +381,10 @@ def create_stitched_image(top_img, bottom_img, y_overlap, x_offset):
         bottom_x_start : bottom_x_start + bottom_w,
     ] = bottom_img
 
-    logger.debug(f"    ✓ Stitching complete: {stitched.shape[1]}x{stitched.shape[0]}")
+    logger.debug(
+        "    ✓ Stitching complete: %sx%s",
+        stitched.shape[1], stitched.shape[0],
+    )
 
     return stitched
 
@@ -385,7 +414,11 @@ def concatenate_images(top_img, bottom_img):
 
     stitched = np.vstack([top_resized, bottom_resized])
 
-    logger.debug(f"    ✓ Simple concatenation: {stitched.shape[1]}x{stitched.shape[0]}")
+    logger.debug(
+        "    ✓ Simple concatenation: %sx%s",
+        stitched.shape[1], stitched.shape[0],
+    )
+
     return stitched
 
 
