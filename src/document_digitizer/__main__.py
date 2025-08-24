@@ -1,4 +1,4 @@
 from .cli import process
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     process()

@@ -53,3 +53,7 @@ dev = [
 [tool.setuptools]
 packages = ["document_digitizer"]
 package-dir = {"" = "src"}
+
+[tool.black]
+target-version = ["py39"]
+line-length = 88
