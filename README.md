@@ -206,6 +206,9 @@ After 30 years of coding mainly in Perl, I'm teaching myself Python and coding w
 This is the generic first part of the project.  The rest is only relevant for my project, so the
 AI code will be in [this repo](https://github.com/cliveholloway/herbert/) soon.
 
+I _have_ used `black` and `flake8`, but I've disabled a couple of warnings for now due to
+time constraints.
+
 And yes, I know I haven't included tests. I'll get around to that when I'm more familiar with Python.
 
 I have also not closely analyzed the vibe coded parts of this, so apologies if not the most efficient!

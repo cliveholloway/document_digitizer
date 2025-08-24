@@ -6,7 +6,7 @@ Provides consistent logging setup across multiple scripts.
 import logging
 import sys
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 
 
 def setup_script_logging(

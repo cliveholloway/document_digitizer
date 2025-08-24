@@ -21,6 +21,7 @@ except ImportError:
 # Script name for logging
 SCRIPT_NAME = "deskew"
 
+
 def load_config(config_path=None):
     """Load configuration from TOML file."""
     if config_path is None:
@@ -166,14 +167,16 @@ def main(input_dir, output_dir, config, verbose):
             elapsed_time = time.time() - start_time
             input_format = image_file.suffix.upper()
             logger.info(
-                "  ✓ Completed in %.2fs - %s→PNG - angle: %.3f°, crop: %spx - saved as %s",
+                ("  ✓ Completed in %.2fs - %s→PNG - angle: %.3f°,"
+                    "crop: %spx - saved as %s"),
                 elapsed_time, input_format, angle, crop_pixels, final_path.name
             )
             processed_count += 1
 
-        except Exception as e:
+        except Exception:
             elapsed_time = time.time() - start_time
-            logger.error("✗ Error processing %s after %.2fs",
+            logger.error(
+                "✗ Error processing %s after %.2fs",
                 image_file.name, elapsed_time, exc_info=True
             )
             failed_count += 1

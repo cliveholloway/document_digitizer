@@ -45,10 +45,8 @@ def load_config(config_path=None):
 @click.option(
     "--verbose", "-v", is_flag=True, help="Enable verbose output for debugging"
 )
-
 def main(input_dir, output_dir, config, verbose):
     """Stitch paired document images together."""
-
     # Load configuration
     try:
         config_data = load_config(config)
@@ -121,7 +119,7 @@ def main(input_dir, output_dir, config, verbose):
 
     logger.info(
         "Found %s image files, created %s pairs",
-        len(image_files), len(pairs), 
+        len(image_files), len(pairs),
     )
     for i, (file1, file2) in enumerate(pairs, 1):
         logger.debug(
@@ -157,7 +155,8 @@ def main(input_dir, output_dir, config, verbose):
                 img1.shape[1], img1.shape[0], img2.shape[1], img2.shape[0],
             )
 
-            # Stitch the images - put top page (img1) on top, bottom page (img2) on bottom
+            # Stitch the images - put top page (img1) on top,
+            # bottom page (img2) on bottom
             logger.debug(
                 "  Stitching images (top page on top, bottom page on bottom):"
             )
@@ -176,7 +175,7 @@ def main(input_dir, output_dir, config, verbose):
             )
             processed_count += 1
 
-        except Exception as e:
+        except Exception:
             elapsed_time = time.time() - start_time
             logger.error(
                 "✗ Error processing pair %s after %.2fs",
@@ -337,6 +336,7 @@ def find_overlap_between_images(top_img, bottom_img, config):
         logger.error("    Template matching failed", exc_info=True)
         return None
 
+
 def create_stitched_image(top_img, bottom_img, y_overlap, x_offset):
     """
     Create the final stitched image with hard cut (no blending).
@@ -367,7 +367,6 @@ def create_stitched_image(top_img, bottom_img, y_overlap, x_offset):
         "    Bottom image position: (%s, %s)",
         bottom_x_start, top_h - y_overlap,
     )
-
 
     # Place top image completely first
     stitched[:top_h, top_x_start : top_x_start + top_w] = top_img
