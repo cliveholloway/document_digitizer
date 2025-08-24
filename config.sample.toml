@@ -2,11 +2,23 @@
 # Logging target: "stdout" for console output, "file" for log file + minimal console
 log_target = "stdout"
 
-[processing]
+[deskew]
+# Minimum rotation angle (degrees) to trigger deskewing
+# Below this threshold, images are considered already straight
+angle_threshold = 0.1
+
+# Maximum rotation angle (degrees) to attempt correction
+# Larger rotations are likely detection errors and will be skipped
+max_rotation = 10.0
+
+[stitching]
 # Overlap detection parameters for stitching
 # Maximum Y overlap to search when finding image overlap (pixels)
 # Setting a max can speed up analysis, if the scans have a consistent overlap
 max_y_overlap = 1500
+
+# Maximum X offset to search when aligning images (pixels)
+max_x_offset = 300
 
 # Minimum confidence score to accept overlap detection (0.0-1.0)
 # Lower values are more permissive, higher values require better matches
