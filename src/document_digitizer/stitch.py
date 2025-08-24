@@ -53,7 +53,7 @@ def main(input_dir, output_dir, config, verbose):
     try:
         config_data = load_config(config)
     except Exception as e:
-        print(f"✗ Failed to load configuration: %s", e)
+        print(f"✗ Failed to load configuration: {e}")
         return
 
     # Setup logging using shared utility
@@ -71,9 +71,7 @@ def main(input_dir, output_dir, config, verbose):
         logger.error("✗ Failed to create output directory: %s", e)
         return
 
-    logger.info("Input directory: %s", input_dir)
-    logger.info(f"Output directory: %s", output_dir)
-    logger.info(f"Log target: %s", config_data['debug']['log_target'])
+    logger.info("Log target: %s", config_data['debug']['log_target'])
 
     logger.info(
         "Stitching config: max_y_overlap=%spx, max_x_offset=%spx",

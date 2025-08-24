@@ -21,10 +21,6 @@ except ImportError:
 # Script name for logging
 SCRIPT_NAME = "deskew"
 
-# Global logger - will be set up in main()
-logger = None
-
-
 def load_config(config_path=None):
     """Load configuration from TOML file."""
     if config_path is None:
@@ -63,7 +59,6 @@ def main(input_dir, output_dir, config, verbose):
         return
 
     # Setup logging using shared utility
-    global logger
     logger = setup_script_logging(SCRIPT_NAME, config_data, output_dir, verbose)
 
     logger.info("Starting deskew script...")
@@ -197,6 +192,8 @@ def deskew_image(img_array, processing_config):
     Detect and correct document rotation using Hough line detection.
     Returns tuple of (processed_image, angle, crop_pixels)
     """
+    logger = get_script_logger(SCRIPT_NAME)
+
     angle_threshold = processing_config["angle_threshold"]
     max_rotation = processing_config["max_rotation"]
 
@@ -290,6 +287,8 @@ def detect_rotation_angle(gray, timeout_seconds=10):
     Detect document rotation angle using multiple Hough line detection methods.
     Added timeout to prevent hanging.
     """
+    logger = get_script_logger(SCRIPT_NAME)
+
     start_time = time.time()
 
     # Apply mild blur to reduce noise but preserve line structure
@@ -376,6 +375,8 @@ def detect_rotation_angle(gray, timeout_seconds=10):
 
 def try_probabilistic_hough_conservative(edges):
     """Conservative probabilistic Hough line detection."""
+    logger = get_script_logger(SCRIPT_NAME)
+
     try:
         lines = cv2.HoughLinesP(
             edges,
@@ -393,6 +394,8 @@ def try_probabilistic_hough_conservative(edges):
 
 def try_probabilistic_hough_aggressive(edges):
     """More aggressive probabilistic Hough to catch subtle lines."""
+    logger = get_script_logger(SCRIPT_NAME)
+
     try:
         lines = cv2.HoughLinesP(
             edges,
@@ -410,6 +413,8 @@ def try_probabilistic_hough_aggressive(edges):
 
 def process_hough_lines(lines, method_name):
     """Process Hough lines to extract rotation angle."""
+    logger = get_script_logger(SCRIPT_NAME)
+
     if lines is None:
         logger.debug("      No lines found with %s method", method_name)
         return None
@@ -483,6 +488,8 @@ def remove_outliers(angles):
 
 def try_standard_hough(edges):
     """Standard Hough line detection with flexible parameters."""
+    logger = get_script_logger(SCRIPT_NAME)
+
     try:
         # Try with different thresholds
         for threshold in [40, 25, 15]:
@@ -523,6 +530,8 @@ def try_standard_hough(edges):
 
 def try_projection_method_simple(gray):
     """Simplified projection profile method for angle detection."""
+    logger = get_script_logger(SCRIPT_NAME)
+
     try:
         h, w = gray.shape
 
