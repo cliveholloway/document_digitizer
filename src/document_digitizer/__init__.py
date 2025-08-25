@@ -10,8 +10,8 @@ Usage:
     document-stitch input_dir output_dir [--config config.toml] [--verbose]
 
 Or directly:
-    python -m your_package.deskew input_dir output_dir
-    python -m your_package.stitch input_dir output_dir
+    python -m document_digitizer.deskew input_dir output_dir
+    python -m document_digitizer.stitch input_dir output_dir
 """
 
 __version__ = "0.1.0"

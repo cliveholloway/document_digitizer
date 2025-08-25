@@ -77,7 +77,7 @@ def main(input_dir, output_dir, config, verbose):
         output_dir.mkdir(parents=True, exist_ok=True)
         logger.debug("✓ Output directory created: %s", output_dir)
     except OSError:
-        logger.error("✗ Failed to create output directory: %s", exc_info=True)
+        logger.error("✗ Failed to create output directory: %s", output_dir, exc_info=True)
         return
 
     # Find image files (multiple formats supported)
